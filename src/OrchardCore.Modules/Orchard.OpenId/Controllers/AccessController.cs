@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -9,13 +9,12 @@ using AspNet.Security.OpenIdConnect.Server;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Orchard.Mvc.ActionConstraints;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using OpenIddict.Core;
+using Orchard.Mvc.ActionConstraints;
 using Orchard.OpenId.Models;
 using Orchard.OpenId.ViewModels;
 using Orchard.Security;
@@ -428,8 +427,7 @@ namespace Orchard.OpenId.Controllers
         private async Task<IActionResult> ExchangeAuthorizationCodeOrRefreshTokenGrantType(OpenIdConnectRequest request)
         {
             // Retrieve the claims principal stored in the authorization code/refresh token.
-            var info = await HttpContext.Authentication.GetAuthenticateInfoAsync(
-                OpenIdConnectServerDefaults.AuthenticationScheme);
+            var info = await HttpContext.AuthenticateAsync();
 
             // Retrieve the user profile corresponding to the authorization code/refresh token.
             // Note: if you want to automatically invalidate the authorization code/refresh token

@@ -1,11 +1,14 @@
-﻿using System;
+using System;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Modules;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 using Orchard.Data.Migration;
 using Orchard.Environment.Commands;
 using Orchard.Environment.Navigation;
@@ -17,8 +20,8 @@ using Orchard.Users.Commands;
 using Orchard.Users.Indexes;
 using Orchard.Users.Models;
 using Orchard.Users.Services;
-using Microsoft.AspNetCore.DataProtection;
 using YesSql.Indexes;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Orchard.Users
 {
@@ -28,12 +31,10 @@ namespace Orchard.Users
 
         private readonly string _tenantName;
         private readonly string _tenantPrefix;
-        private readonly IdentityOptions _options;
         private readonly IDataProtectionProvider _dataProtectionProvider;
 
-        public Startup(ShellSettings shellSettings, IOptions<IdentityOptions> options, IDataProtectionProvider dataProtectionProvider)
+        public Startup(ShellSettings shellSettings, IDataProtectionProvider dataProtectionProvider)
         {
-            _options = options.Value;
             _tenantName = shellSettings.Name;
             _tenantPrefix = "/" + shellSettings.RequestUrlPrefix;
             _dataProtectionProvider = dataProtectionProvider.CreateProtector(_tenantName);
@@ -41,13 +42,17 @@ namespace Orchard.Users
 
         public override void Configure(IApplicationBuilder builder, IRouteBuilder routes, IServiceProvider serviceProvider)
         {
-            builder.UseIdentity();
-            builder
-                .UseCookieAuthentication(_options.Cookies.ApplicationCookie)
-                .UseCookieAuthentication(_options.Cookies.ExternalCookie)
-                .UseCookieAuthentication(_options.Cookies.TwoFactorRememberMeCookie)
-                .UseCookieAuthentication(_options.Cookies.TwoFactorUserIdCookie)
-                ;
+            builder.UseAuthentication();
+
+            var authenticationSchemeProvider = serviceProvider.GetService<IAuthenticationSchemeProvider>();
+
+            authenticationSchemeProvider.AddScheme(new AuthenticationScheme(
+                IdentityConstants.ApplicationScheme, null, typeof(CookieAuthenticationHandler)));
+
+            authenticationSchemeProvider.AddScheme(new AuthenticationScheme(
+                IdentityConstants.ExternalScheme, null, typeof(CookieAuthenticationHandler)));
+
+            var authorizationHandlerProvider = serviceProvider.GetService<IAuthorizationHandlerProvider>();
 
             routes.MapAreaRoute(
                 name: "Login",
@@ -66,8 +71,64 @@ namespace Orchard.Users
 
             new IdentityBuilder(typeof(User), typeof(Role), services).AddDefaultTokenProviders();
 
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = IdentityConstants.ApplicationScheme;
+                options.DefaultChallengeScheme = IdentityConstants.ApplicationScheme;
+                options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
+            })
+            .AddCookie(IdentityConstants.ApplicationScheme, o =>
+            {
+                o.Cookie.Name = "orchauth_" + _tenantName;
+                o.Cookie.Path = _tenantPrefix;
+                o.LoginPath = "/" + LoginPath;
+                o.AccessDeniedPath = "/" + LoginPath;
+                // Using a different DataProtectionProvider per tenant ensures cookie isolation between tenants
+                o.DataProtectionProvider = _dataProtectionProvider;
+
+                //o.LoginPath = new PathString("/Account/Login");
+                o.Events = new CookieAuthenticationEvents
+                {
+                    OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync
+                };
+            })
+            .AddCookie(IdentityConstants.ExternalScheme, o =>
+            {
+                o.Cookie.Name = "orchauth_" + _tenantName;
+                o.Cookie.Path = _tenantPrefix;
+                o.LoginPath = "/" + LoginPath;
+                o.AccessDeniedPath = "/" + LoginPath;
+                // Using a different DataProtectionProvider per tenant ensures cookie isolation between tenants
+                o.DataProtectionProvider = _dataProtectionProvider;
+
+                //o.Cookie.Name = IdentityConstants.ExternalScheme;
+                o.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+            })
+            .AddCookie(IdentityConstants.TwoFactorRememberMeScheme, o =>
+            {
+                o.Cookie.Name = "orchauth_" + _tenantName;
+                o.Cookie.Path = _tenantPrefix;
+                o.LoginPath = "/" + LoginPath;
+                o.AccessDeniedPath = "/" + LoginPath;
+                // Using a different DataProtectionProvider per tenant ensures cookie isolation between tenants
+                o.DataProtectionProvider = _dataProtectionProvider;
+
+                //o.Cookie.Name = IdentityConstants.TwoFactorRememberMeScheme;
+            })
+            .AddCookie(IdentityConstants.TwoFactorUserIdScheme, o =>
+            {
+                o.Cookie.Name = "orchauth_" + _tenantName;
+                o.Cookie.Path = _tenantPrefix;
+                o.LoginPath = "/" + LoginPath;
+                o.AccessDeniedPath = "/" + LoginPath;
+                // Using a different DataProtectionProvider per tenant ensures cookie isolation between tenants
+                o.DataProtectionProvider = _dataProtectionProvider;
+
+                //o.Cookie.Name = IdentityConstants.TwoFactorUserIdScheme;
+                o.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+            });
+
             // Identity services
-            services.TryAddSingleton<IdentityMarkerService>();
             services.TryAddScoped<IUserValidator<User>, UserValidator<User>>();
             services.TryAddScoped<IPasswordValidator<User>, PasswordValidator<User>>();
             services.TryAddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
@@ -81,20 +142,40 @@ namespace Orchard.Users
             services.TryAddScoped<SignInManager<User>>();
 
             services.TryAddScoped<IUserStore<User>, UserStore>();
-            
-            services.Configure<IdentityOptions>(options =>
+
+            /*services.ConfigureApplicationCookie(options =>
             {
-                options.Cookies.ApplicationCookie.CookieName = "orchauth_" + _tenantName;
-                options.Cookies.ApplicationCookie.CookiePath = _tenantPrefix;
-                options.Cookies.ApplicationCookie.LoginPath = "/" + LoginPath;
-                options.Cookies.ApplicationCookie.AccessDeniedPath = "/" + LoginPath;
+                options.Cookie.Name = "orchauth_" + _tenantName;
+                options.Cookie.Path = _tenantPrefix;
+                options.LoginPath = "/" + LoginPath;
+                options.AccessDeniedPath = "/" + LoginPath;
                 // Using a different DataProtectionProvider per tenant ensures cookie isolation between tenants
-                options.Cookies.ApplicationCookie.DataProtectionProvider = _dataProtectionProvider;
-                options.Cookies.ExternalCookie.DataProtectionProvider = _dataProtectionProvider;
-                options.Cookies.TwoFactorRememberMeCookie.DataProtectionProvider = _dataProtectionProvider;
-                options.Cookies.TwoFactorUserIdCookie.DataProtectionProvider = _dataProtectionProvider;                
-            });
-            
+                options.DataProtectionProvider = _dataProtectionProvider;
+            })
+            .ConfigureExternalCookie(options =>
+            {
+                options.Cookie.Name = "orchauth_" + _tenantName;
+                options.Cookie.Path = _tenantPrefix;
+                options.LoginPath = "/" + LoginPath;
+                options.AccessDeniedPath = "/" + LoginPath;
+                options.DataProtectionProvider = _dataProtectionProvider;
+            })
+            .Configure<CookieAuthenticationOptions>(IdentityConstants.TwoFactorRememberMeScheme, options =>
+            {
+                options.Cookie.Name = "orchauth_" + _tenantName;
+                options.Cookie.Path = _tenantPrefix;
+                options.LoginPath = "/" + LoginPath;
+                options.AccessDeniedPath = "/" + LoginPath;
+                options.DataProtectionProvider = _dataProtectionProvider;
+            })
+            .Configure<CookieAuthenticationOptions>(IdentityConstants.TwoFactorUserIdScheme, options =>
+            {
+                options.Cookie.Name = "orchauth_" + _tenantName;
+                options.Cookie.Path = _tenantPrefix;
+                options.LoginPath = "/" + LoginPath;
+                options.AccessDeniedPath = "/" + LoginPath;
+                options.DataProtectionProvider = _dataProtectionProvider;
+            });*/
 
             services.AddScoped<IIndexProvider, UserIndexProvider>();
             services.AddScoped<IDataMigration, Migrations>();
@@ -107,7 +188,6 @@ namespace Orchard.Users
 
             services.AddScoped<IPermissionProvider, Permissions>();
             services.AddScoped<INavigationProvider, AdminMenu>();
-
         }
     }
 }

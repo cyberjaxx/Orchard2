@@ -50,40 +50,7 @@ namespace Orchard.OpenId
                 return;
             }
 
-            builder.UseOpenIddict();
-
-            switch (settings.AccessTokenFormat)
-            {
-                case OpenIdSettings.TokenFormat.JWT:
-                {
-                    builder.UseJwtBearerAuthentication(new JwtBearerOptions
-                    {
-                        RequireHttpsMetadata = !settings.TestingModeEnabled,
-                        Authority = settings.Authority,
-                        TokenValidationParameters = new TokenValidationParameters
-                        {
-                            ValidAudiences = settings.Audiences
-                        }
-                    });
-                    break;
-                }
-
-                case OpenIdSettings.TokenFormat.Encrypted:
-                {
-                    builder.UseOAuthValidation(options =>
-                    {
-                        options.Audiences.UnionWith(settings.Audiences);
-                        options.DataProtectionProvider = _dataProtectionProvider;
-                    });
-                    break;
-                }
-
-                default:
-                {
-                    Debug.Fail("An unsupported access token format was specified.");
-                    break;
-                }
-            }
+            builder.UseAuthentication();
 
             // Admin
             routes.MapAreaRoute(
@@ -96,6 +63,54 @@ namespace Orchard.OpenId
 
         public override void ConfigureServices(IServiceCollection services)
         {
+            // Temporary fix because we need 'OpenIdService'
+            // to know which authentication services to add
+            var serviceProvider = services.BuildServiceProvider();
+            var openIdService = serviceProvider.GetService<IOpenIdService>();
+            var settings = openIdService.GetOpenIdSettingsAsync().GetAwaiter().GetResult();
+
+            if (openIdService.IsValidOpenIdSettings(settings))
+            {
+                var authenticationBuilder = services.AddAuthentication();
+
+                switch (settings.AccessTokenFormat)
+                {
+                    case OpenIdSettings.TokenFormat.JWT:
+                    {
+                        authenticationBuilder.AddJwtBearer(options =>
+                        {
+                            options.RequireHttpsMetadata = !settings.TestingModeEnabled;
+                            options.Authority = settings.Authority;
+                            options.TokenValidationParameters = new TokenValidationParameters
+                            {
+                                ValidAudiences = settings.Audiences
+                            };
+                        });
+
+                        break;
+                    }
+
+                    case OpenIdSettings.TokenFormat.Encrypted:
+                    {
+                        authenticationBuilder.AddOAuthValidation(options =>
+                        {
+                            //options.Audiences.UnionWith(settings.Audiences);
+                            options.DataProtectionProvider = _dataProtectionProvider;
+                        });
+
+                        break;
+                    }
+
+                    default:
+                    {
+                        Debug.Fail("An unsupported access token format was specified.");
+                        break;
+                    }
+                }
+            }
+
+            (serviceProvider as IDisposable).Dispose();
+
             services.AddScoped<IDataMigration, Migrations>();
             services.AddScoped<IPermissionProvider, Permissions>();
             services.AddScoped<IIndexProvider, OpenIdApplicationIndexProvider>();
