@@ -65,6 +65,7 @@ namespace Orchard.OpenId
         {
             // Temporary fix because we need 'OpenIdService'
             // to know which authentication services to add
+            services.AddScoped<IOpenIdService, OpenIdService>();
             var serviceProvider = services.BuildServiceProvider();
             var openIdService = serviceProvider.GetService<IOpenIdService>();
             var settings = openIdService.GetOpenIdSettingsAsync().GetAwaiter().GetResult();
@@ -94,7 +95,7 @@ namespace Orchard.OpenId
                     {
                         authenticationBuilder.AddOAuthValidation(options =>
                         {
-                            //options.Audiences.UnionWith(settings.Audiences);
+                            options.Audiences.UnionWith(settings.Audiences);
                             options.DataProtectionProvider = _dataProtectionProvider;
                         });
 
@@ -118,7 +119,7 @@ namespace Orchard.OpenId
             services.AddScoped<INavigationProvider, AdminMenu>();
 
             services.AddScoped<IDisplayDriver<ISite>, OpenIdSiteSettingsDisplayDriver>();
-            services.AddScoped<IOpenIdService, OpenIdService>();
+            //services.AddScoped<IOpenIdService, OpenIdService>();
             services.AddRecipeExecutionStep<OpenIdSettingsStep>();
             services.AddRecipeExecutionStep<OpenIdApplicationStep>();
 
