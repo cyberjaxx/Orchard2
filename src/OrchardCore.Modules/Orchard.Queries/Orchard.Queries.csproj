@@ -20,7 +20,7 @@
 
   <ItemGroup>
     <PackageReference Include="Irony" Version="1.0.6" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="2.0.0-*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="$(AspNetCoreVersion)" />
   </ItemGroup>
 
   <ItemGroup>

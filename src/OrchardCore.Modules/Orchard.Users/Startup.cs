@@ -22,6 +22,8 @@ using Orchard.Users.Models;
 using Orchard.Users.Services;
 using YesSql.Indexes;
 
+using Microsoft.AspNetCore.Http.Features.Authentication;
+
 namespace Orchard.Users
 {
     public class Startup : StartupBase
@@ -67,14 +69,17 @@ namespace Orchard.Users
             {
                 o.DefaultAuthenticateScheme = IdentityConstants.ApplicationScheme;
                 o.DefaultChallengeScheme = IdentityConstants.ApplicationScheme;
-                o.DefaultSignInScheme = IdentityConstants.ApplicationScheme;
+                o.DefaultSignInScheme = IdentityConstants.ExternalScheme;
             })
             .AddCookie(IdentityConstants.ApplicationScheme, o =>
             {
                 o.LoginPath = new PathString("/Account/Login");
                 o.Events = new CookieAuthenticationEvents
                 {
-                    OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync,
+                    OnValidatePrincipal = async context =>
+                    {
+                        await SecurityStampValidator.ValidatePrincipalAsync(context);
+                    }
                 };
             })
             .AddCookie(IdentityConstants.ExternalScheme, o =>
@@ -83,9 +88,8 @@ namespace Orchard.Users
                 o.ExpireTimeSpan = TimeSpan.FromMinutes(5);
             })
             .AddCookie(IdentityConstants.TwoFactorRememberMeScheme, o =>
-            {
-                o.Cookie.Name = IdentityConstants.TwoFactorRememberMeScheme;
-            })
+                o.Cookie.Name = IdentityConstants.TwoFactorRememberMeScheme)
+
             .AddCookie(IdentityConstants.TwoFactorUserIdScheme, IdentityConstants.TwoFactorUserIdScheme, o =>
             {
                 o.Cookie.Name = IdentityConstants.TwoFactorUserIdScheme;
@@ -110,7 +114,7 @@ namespace Orchard.Users
             services.ConfigureApplicationCookie(o =>
             {
                 o.Cookie.Name = "orchauth_" + _tenantName;
-                o.Cookie.Path = _tenantPrefix;
+                o.Cookie.Path = new PathString(_tenantPrefix);
                 o.LoginPath = new PathString("/" + LoginPath);
                 o.AccessDeniedPath = new PathString("/" + LoginPath);
                 // Using a different DataProtectionProvider per tenant ensures cookie isolation between tenants

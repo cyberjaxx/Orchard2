@@ -50,7 +50,7 @@ namespace Orchard.OpenId
                 return;
             }
 
-            builder.UseAuthentication();
+            //builder.UseAuthentication();
 
             // Admin
             routes.MapAreaRoute(
@@ -67,13 +67,14 @@ namespace Orchard.OpenId
             // to know which authentication services to add
             services.AddScoped<IOpenIdService, OpenIdService>();
             var serviceProvider = services.BuildServiceProvider();
+
             var openIdService = serviceProvider.GetService<IOpenIdService>();
             var settings = openIdService.GetOpenIdSettingsAsync().GetAwaiter().GetResult();
 
+            var authenticationBuilder = services.AddAuthentication();
+
             if (openIdService.IsValidOpenIdSettings(settings))
             {
-                var authenticationBuilder = services.AddAuthentication();
-
                 switch (settings.AccessTokenFormat)
                 {
                     case OpenIdSettings.TokenFormat.JWT:
