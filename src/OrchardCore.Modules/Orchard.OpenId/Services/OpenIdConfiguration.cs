@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IdentityModel.Tokens.Jwt;
 using AspNet.Security.OpenIdConnect.Primitives;
 using Microsoft.AspNetCore.Builder;
@@ -22,7 +22,7 @@ namespace Orchard.OpenId
         }
 
         public void Configure(OpenIddictOptions options)
-        {   
+        {
             var settings = _openIdService.GetOpenIdSettingsAsync().GetAwaiter().GetResult();
             if (!_openIdService.IsValidOpenIdSettings(settings))
             {
@@ -30,6 +30,11 @@ namespace Orchard.OpenId
                 return;
             }
 
+            ConfigureOptions(options, settings, _logger);
+        }
+
+        public static void ConfigureOptions(OpenIddictOptions options, OpenIdSettings settings, ILogger<OpenIdConfiguration> logger = null)
+        {   
             if (settings.AccessTokenFormat == OpenIdSettings.TokenFormat.JWT)
             {
                 options.AccessTokenHandler = new JwtSecurityTokenHandler();
@@ -50,7 +55,7 @@ namespace Orchard.OpenId
                 }
                 catch (Exception exception)
                 {
-                    _logger.LogError("An error occurred while trying to register a X.509 certificate.", exception);
+                    logger?.LogError("An error occurred while trying to register a X.509 certificate.", exception);
                     throw;
                 }
             }

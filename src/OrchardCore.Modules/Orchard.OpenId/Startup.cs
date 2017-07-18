@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Modules;
@@ -50,8 +51,6 @@ namespace Orchard.OpenId
                 return;
             }
 
-            //builder.UseAuthentication();
-
             // Admin
             routes.MapAreaRoute(
                 name: "AdminOpenId",
@@ -63,27 +62,28 @@ namespace Orchard.OpenId
 
         public override void ConfigureServices(IServiceCollection services)
         {
-            // Temporary fix because we need 'OpenIdService'
-            // to know which authentication services to add
+            // for testing, to be able to use 'OpenIdService'
             services.AddScoped<IOpenIdService, OpenIdService>();
             var serviceProvider = services.BuildServiceProvider();
-
             var openIdService = serviceProvider.GetService<IOpenIdService>();
+
             var settings = openIdService.GetOpenIdSettingsAsync().GetAwaiter().GetResult();
+            var validOpenIdSettings = openIdService.IsValidOpenIdSettings(settings);
+            (serviceProvider as IDisposable).Dispose();
 
-            var authenticationBuilder = services.AddAuthentication();
-
-            if (openIdService.IsValidOpenIdSettings(settings))
+            if (validOpenIdSettings)
             {
+                var authenticationBuilder = services.AddAuthentication();
+
                 switch (settings.AccessTokenFormat)
                 {
                     case OpenIdSettings.TokenFormat.JWT:
                     {
-                        authenticationBuilder.AddJwtBearer(options =>
+                        services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, o =>
                         {
-                            options.RequireHttpsMetadata = !settings.TestingModeEnabled;
-                            options.Authority = settings.Authority;
-                            options.TokenValidationParameters = new TokenValidationParameters
+                            o.RequireHttpsMetadata = !settings.TestingModeEnabled;
+                            o.Authority = settings.Authority;
+                            o.TokenValidationParameters = new TokenValidationParameters
                             {
                                 ValidAudiences = settings.Audiences
                             };
@@ -94,10 +94,10 @@ namespace Orchard.OpenId
 
                     case OpenIdSettings.TokenFormat.Encrypted:
                     {
-                        authenticationBuilder.AddOAuthValidation(options =>
+                        authenticationBuilder.AddOAuthValidation(o =>
                         {
-                            options.Audiences.UnionWith(settings.Audiences);
-                            options.DataProtectionProvider = _dataProtectionProvider;
+                            o.Audiences.UnionWith(settings.Audiences);
+                            o.DataProtectionProvider = _dataProtectionProvider;
                         });
 
                         break;
@@ -110,8 +110,6 @@ namespace Orchard.OpenId
                     }
                 }
             }
-
-            (serviceProvider as IDisposable).Dispose();
 
             services.AddScoped<IDataMigration, Migrations>();
             services.AddScoped<IPermissionProvider, Permissions>();
@@ -129,18 +127,26 @@ namespace Orchard.OpenId
 
             services.AddScoped<OpenIdApplicationStore>();
 
-            services.AddOpenIddict<OpenIdApplication, OpenIdAuthorization, OpenIdScope, OpenIdToken>(builder =>
+            if (validOpenIdSettings)
             {
-                builder.AddApplicationStore<OpenIdApplicationStore>()
-                       .AddTokenStore<OpenIdTokenStore>();
+                services.AddOpenIddict<OpenIdApplication, OpenIdAuthorization, OpenIdScope, OpenIdToken>(builder =>
+                {
+                    builder.AddApplicationStore<OpenIdApplicationStore>()
+                           .AddTokenStore<OpenIdTokenStore>();
 
-                builder.UseDataProtectionProvider(_dataProtectionProvider);
+                    builder.UseDataProtectionProvider(_dataProtectionProvider);
 
-                builder.RequireClientIdentification()
-                       .EnableRequestCaching();
+                    builder.RequireClientIdentification()
+                           .EnableRequestCaching();
 
-                builder.Configure(options => options.ApplicationCanDisplayErrors = true);
-            });
+                    builder.Configure(o =>
+                    {
+                        // for testing, to apply settings before configure
+                        OpenIdConfiguration.ConfigureOptions(o, settings);
+                        o.ApplicationCanDisplayErrors = true;
+                    });
+                });
+            }
 
             services.AddScoped<IConfigureOptions<OpenIddictOptions>, OpenIdConfiguration>();
         }

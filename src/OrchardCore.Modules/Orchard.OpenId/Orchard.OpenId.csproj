@@ -22,7 +22,7 @@
   <ItemGroup>
     <PackageReference Include="AspNet.Security.OAuth.Validation" Version="2.0.0-*" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(AspNetCoreVersion)" />
-    <PackageReference Include="OpenIddict" Version="2.0.0-*" />
+    <PackageReference Include="OpenIddict" Version="$(AspNetCoreVersion)" />
   </ItemGroup>
 
 </Project>

@@ -22,8 +22,6 @@ using Orchard.Users.Models;
 using Orchard.Users.Services;
 using YesSql.Indexes;
 
-using Microsoft.AspNetCore.Http.Features.Authentication;
-
 namespace Orchard.Users
 {
     public class Startup : StartupBase
@@ -61,8 +59,8 @@ namespace Orchard.Users
             /// and change telephone number operations, and for two factor authentication token generation.
             new IdentityBuilder(typeof(User), typeof(Role), services).AddDefaultTokenProviders();
 
-            // 'IAuthenticationSchemeProvider' is already registered as a host singleton.
-            // We are registering it again so that there is one instance for each tenant.
+            // 'IAuthenticationSchemeProvider' is already registered at the host level.
+            // We need to register it again so it is taken into account at the tenant level.
             services.AddSingleton<IAuthenticationSchemeProvider, AuthenticationSchemeProvider>();
 
             services.AddAuthentication(o =>
